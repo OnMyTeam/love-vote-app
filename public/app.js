@@ -43,7 +43,7 @@ function chooseRole(role) {
   $('#login-copy').textContent = isAdmin ? '관리자는 투표 현황과 결과만 확인할 수 있어요.' : isGuest ? 'Guest는 투표 없이 현재 현황만 볼 수 있어요.' : '등록된 이름만 투표할 수 있어요.';
   $('#name-label').textContent = isAdmin ? '관리자 비밀번호' : isGuest ? '표시 이름' : '이름';
   $('#name-input').type = isAdmin ? 'password' : 'text';
-  $('#name-input').autocomplete = isAdmin ? 'current-password' : 'off';
+  $('#name-input').autocomplete = isAdmin ? 'new-password' : 'off';
   $('#name-input').placeholder = isAdmin ? '비밀번호를 입력하세요' : isGuest ? 'Guest' : '이름을 입력하세요';
   $('#name-input').closest('label')?.remove();
   show(nameView);
@@ -52,7 +52,12 @@ function chooseRole(role) {
     enter();
     return;
   }
-  if (isAdmin) $('#name-input').value = '관리자';
+  if (isAdmin) {
+    $('#name-input').value = '';
+    $('#name-input').defaultValue = '';
+    $('#name-input').removeAttribute('value');
+    window.setTimeout(() => { $('#name-input').value = ''; }, 0);
+  }
   $('#name-input').focus();
 }
 
