@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f6fb" />
+    <title>Love Vote — 우리들의 선택</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Love Vote 홈"><span class="brand-mark">♥</span><span>LOVE <em>/</em> VOTE</span></a>
+        <div class="live-pill"><i></i> LIVE ROUND <span id="top-round">--:00</span></div>
+      </header>
+
+      <section id="landing-view" class="view landing-view">
+        <div class="hero-copy">
+          <p class="eyebrow">A LITTLE CHOICE, A LOT OF FEELING</p>
+          <h1>오늘, 당신의<br /><span>마음은 어디로</span> 향하나요?</h1>
+          <p class="hero-subtitle">매 시간 새롭게 열리는 우리들의 작은 투표.<br />마음을 고르고, 함께 결과를 만들어 보세요.</p>
+        </div>
+        <div class="role-grid">
+          <button class="role-card participant-card" data-role="participant">
+            <span class="role-icon">✦</span><span class="role-label">참여자</span><span class="role-description">이름을 확인하고<br />투표에 참여하기</span><span class="role-arrow">↗</span>
+          </button>
+          <button class="role-card guest-card" data-role="guest">
+            <span class="role-icon">◌</span><span class="role-label">Guest</span><span class="role-description">현재 결과와<br />투표 현황 둘러보기</span><span class="role-arrow">↗</span>
+          </button>
+          <button class="role-card admin-card" data-role="admin">
+            <span class="role-icon">⌘</span><span class="role-label">관리자</span><span class="role-description">현재 라운드와<br />결과 확인하기</span><span class="role-arrow">↗</span>
+          </button>
+        </div>
+        <div class="landing-footer"><span>PRIVATE VOTING SPACE</span><span class="footer-line"></span><span>EVERY HOUR, A NEW STORY</span></div>
+      </section>
+
+      <section id="name-view" class="view centered-view hidden">
+        <button class="back-button" id="name-back">← 처음으로</button>
+        <div class="panel login-panel">
+          <div class="panel-icon" id="login-icon">✦</div>
+          <p class="eyebrow" id="login-eyebrow">PARTICIPANT ACCESS</p>
+          <h2 id="login-title">참여자 이름을<br /><span>확인해 주세요</span></h2>
+          <p class="panel-copy" id="login-copy">config.toml에 등록된 이름만 투표할 수 있어요.</p>
+          <form id="login-form">
+            <label for="name-input" id="name-label">이름</label>
+            <input id="name-input" autocomplete="off" placeholder="이름을 입력하세요" maxlength="30" />
+            <p class="form-error" id="login-error"></p>
+            <button class="primary-button" type="submit">입장하기 <span>→</span></button>
+          </form>
+        </div>
+      </section>
+
+      <section id="vote-view" class="view hidden">
+        <div class="dashboard-head">
+          <div><p class="eyebrow">HOURLY LOVE VOTE</p><h2>반가워요, <span id="voter-name">—</span>님</h2></div>
+          <button class="outline-button" id="logout-button">나가기</button>
+        </div>
+        <div class="dashboard-grid">
+          <div class="vote-panel panel">
+            <div class="round-heading"><div><span class="mini-label">CURRENT ROUND</span><h3 id="round-label">--:00 — --:00</h3></div><div class="round-status" id="round-status">진행 중</div></div>
+            <div class="progress-wrap"><div class="progress-meta"><span id="progress-copy">투표 현황을 불러오는 중</span><span id="progress-count">0 / 0</span></div><div class="progress-track"><div id="progress-bar"></div></div></div>
+            <div class="read-only-banner hidden" id="read-only-banner"><span class="read-only-icon">⌁</span><div><strong id="read-only-title">결과 확인 모드입니다</strong><p id="read-only-copy">참여자만 후보를 선택할 수 있어요.</p></div></div>
+            <div class="admin-tools hidden" id="admin-tools">
+              <div class="admin-tools-heading"><div><span class="mini-label">ADMIN TOOLS</span><h4>관리자 도구</h4></div><span class="active-count" id="active-count">참여 중 0명</span></div>
+              <button class="admin-action danger-action" id="release-participants"><span>↻</span><div><strong>모든 참여상태 해제</strong><small>현재 참여 중인 이름을 다시 입력할 수 있게 합니다.</small></div></button>
+              <div class="active-participants" id="active-participants-list"></div>
+              <div class="candidate-managers" id="candidate-managers">
+                <div class="candidate-manager-heading"><span>후보자 관리</span><small>추가 / 삭제</small></div>
+                <div class="candidate-manager" data-manager-group="boy"><div class="candidate-manager-label boy-label">BOY <span>남자</span></div><div class="managed-candidate-list" id="admin-boy-candidates"></div><div class="add-candidate-row"><input id="add-boy-candidate" maxlength="30" placeholder="남자 후보 이름" /><button type="button" data-add-candidate="boy">추가</button></div></div>
+                <div class="candidate-manager" data-manager-group="girl"><div class="candidate-manager-label girl-label">GIRL <span>여자</span></div><div class="managed-candidate-list" id="admin-girl-candidates"></div><div class="add-candidate-row"><input id="add-girl-candidate" maxlength="30" placeholder="여자 후보 이름" /><button type="button" data-add-candidate="girl">추가</button></div></div>
+              </div>
+              <div class="result-limit-setting"><label for="result-limit-input">투표 종료 후 결과 표시 인원</label><div class="limit-input-row"><input id="result-limit-input" type="number" min="1" value="3" /><span>명까지</span><button class="save-limit-button" id="save-result-limit">저장</button></div></div>
+              <div class="admin-reset"><label for="admin-round-select">시간대별 투표 초기화</label><select id="admin-round-select"></select><button class="admin-action reset-action" id="reset-round"><span>⌫</span><div><strong>선택한 시간대 초기화</strong><small>해당 시간대의 투표 기록을 삭제합니다.</small></div></button></div>
+              <p class="admin-message" id="admin-message"></p>
+            </div>
+            <div id="participant-vote-area">
+              <div class="candidate-heading"><span id="candidate-heading-copy">어떤 친구를 선택할까요?</span><small>ONE CHOICE</small></div>
+              <div class="candidate-sections" id="candidate-sections"></div>
+              <p class="vote-error" id="vote-error"></p>
+              <button class="primary-button vote-button" id="vote-button" disabled>선택하고 투표하기 <span>→</span></button>
+              <p class="vote-note" id="vote-note">한 시간에 한 번 투표할 수 있습니다.</p>
+            </div>
+          </div>
+          <aside class="results-panel">
+            <div class="results-title"><div><span class="mini-label">ARCHIVE</span><h3>시간별 결과</h3></div><span class="archive-count" id="archive-count">0 ROUNDS</span></div>
+            <div id="history-list" class="history-list"><div class="empty-state">첫 결과가 쌓이면<br />이곳에 기록됩니다.</div></div>
+          </aside>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" role="status"></div>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
