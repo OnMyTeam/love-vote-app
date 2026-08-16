@@ -130,9 +130,19 @@ function renderAdminTools(status) {
     : '<p class="no-active-participants">현재 참여 중인 사람이 없습니다.</p>';
   renderCandidateManagers(status.config);
   $('#result-limit-input').value = status.admin?.resultLimit || 3;
-  const rounds = [status.currentRound, ...status.history];
-  const uniqueRounds = rounds.filter((round, index, list) => list.findIndex((item) => item.key === round.key) === index);
-  $('#admin-round-select').innerHTML = uniqueRounds.map((round, index) => `<option value="${round.key}">${index === 0 ? '현재 ' : ''}${round.dateLabel} · ${round.timeLabel}</option>`).join('');
+  const rounds = status.admin?.rounds || [status.currentRound, ...status.history];
+  $('#admin-round-select').innerHTML = rounds.map((round, index) => `<option value="${round.key}">${index === 0 ? '현재 ' : ''}${round.dateLabel} · ${round.timeLabel} (${round.total}/${round.eligible})</option>`).join('');
+  renderRoundParticipation(rounds[0]);
+}
+
+function renderRoundParticipation(round) {
+  const element = $('#round-participation');
+  if (!element) return;
+  if (!round?.participants?.length) {
+    element.innerHTML = '<p class="no-active-participants">참여자 정보가 없습니다.</p>';
+    return;
+  }
+  element.innerHTML = `<div class="round-participation-summary"><strong>${round.total} / ${round.eligible}명 투표</strong><span>${round.complete ? '모두 완료' : '미투표자 있음'}</span></div>${round.participants.map((participant) => `<div class="round-participant-row"><span><i class="${participant.group}-dot"></i>${participant.name}</span><span class="${participant.voted ? 'voted' : 'not-voted'}">${participant.voted ? `투표 완료${participant.candidate ? ` · ${participant.candidate}` : ''}` : '미투표'}</span></div>`).join('')}`;
 }
 
 function renderCandidateManagers(config) {
@@ -289,6 +299,10 @@ $('#vote-button').addEventListener('click', submitVote);
 $('#release-participants').addEventListener('click', releaseParticipants);
 $('#reset-round').addEventListener('click', resetRound);
 $('#save-result-limit').addEventListener('click', saveResultLimit);
+$('#admin-round-select').addEventListener('change', () => {
+  const round = state.status?.admin?.rounds?.find((item) => item.key === $('#admin-round-select').value);
+  renderRoundParticipation(round);
+});
 $('#active-participants-list').addEventListener('click', (event) => {
   const button = event.target.closest('[data-kick-participant]');
   if (button) kickParticipant(button.dataset.kickParticipant);
