@@ -61,16 +61,30 @@ function chooseRole(role) {
   $('#name-input').focus();
 }
 
+const candidateCharacterPool = {
+  boy: ['👨‍🚀', '👨‍🎨', '👨‍🍳', '👨‍💻', '👨‍🔬', '👨‍🎤', '👨‍🚒', '👨‍🏫', '👨‍🌾', '👨‍⚕️'],
+  girl: ['👩‍🚀', '👩‍🎨', '👩‍🍳', '👩‍💻', '👩‍🔬', '👩‍🎤', '👩‍🚒', '👩‍🏫', '👩‍🌾', '👩‍⚕️'],
+};
+
+function getRandomCharacters(group, count) {
+  const characters = [...candidateCharacterPool[group]];
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [characters[index], characters[randomIndex]] = [characters[randomIndex], characters[index]];
+  }
+  return Array.from({ length: count }, (_, index) => characters[index % characters.length]);
+}
+
 function renderCandidates(config, voterGroup, readOnly = false) {
   const groups = voterGroup === 'boy' ? ['girl'] : voterGroup === 'girl' ? ['boy'] : ['boy', 'girl'];
   const sections = groups.map((group) => {
     const names = group === 'boy' ? config.boy : config.girl;
     const label = group === 'boy' ? 'BOY' : 'GIRL';
     const koreanLabel = group === 'boy' ? '남자' : '여자';
-    const character = group === 'boy' ? '👦' : '👧';
-    const makeList = names.map((name) => readOnly
-      ? `<div class="candidate-option readonly-option"><div class="candidate-card"><span class="candidate-character ${group}-character" aria-hidden="true">${character}</span><span class="candidate-name">${name}</span></div></div>`
-      : `<div class="candidate-option"><input type="radio" id="${group}-${name}" name="candidate" value="${name}" /><label for="${group}-${name}"><span class="candidate-character ${group}-character" aria-hidden="true">${character}</span><span class="candidate-name">${name}</span></label></div>`).join('');
+    const characters = getRandomCharacters(group, names.length);
+    const makeList = names.map((name, index) => readOnly
+      ? `<div class="candidate-option readonly-option"><div class="candidate-card"><span class="candidate-character ${group}-character" aria-hidden="true">${characters[index]}</span><span class="candidate-name">${name}</span></div></div>`
+      : `<div class="candidate-option"><input type="radio" id="${group}-${name}" name="candidate" value="${name}" /><label for="${group}-${name}"><span class="candidate-character ${group}-character" aria-hidden="true">${characters[index]}</span><span class="candidate-name">${name}</span></label></div>`).join('');
     return `<div class="candidate-section"><div class="section-tag ${group}-tag">${label} <span>${koreanLabel}</span></div><div class="candidate-list">${makeList || '<p class="no-candidates">등록된 후보가 없습니다.</p>'}</div></div>`;
   }).join('');
   $('#candidate-sections').innerHTML = sections;
@@ -130,6 +144,7 @@ function renderAdminTools(status) {
     : '<p class="no-active-participants">현재 참여 중인 사람이 없습니다.</p>';
   renderCandidateManagers(status.config);
   $('#result-limit-input').value = status.admin?.resultLimit || 3;
+  $('#admin-session-minutes').value = status.admin?.sessionMinutes || 30;
   const rounds = status.admin?.rounds || [status.currentRound, ...status.history];
   $('#admin-round-select').innerHTML = rounds.map((round, index) => `<option value="${round.key}">${index === 0 ? '현재 ' : ''}${round.dateLabel} · ${round.timeLabel} (${round.total}/${round.eligible})</option>`).join('');
   renderRoundParticipation(rounds[0]);
@@ -196,6 +211,16 @@ function logout() {
   clearSavedSession();
   state.role = null; state.token = null; state.name = null; state.selected = null;
   show(landingView);
+}
+
+function logoutOnPageExit() {
+  const token = state.token;
+  if (!token) return;
+  const payload = JSON.stringify({ token });
+  const body = new Blob([payload], { type: 'application/json' });
+  if (!navigator.sendBeacon || !navigator.sendBeacon('/api/logout', body)) {
+    fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+  }
 }
 
 async function restoreSession() {
@@ -269,6 +294,16 @@ async function saveResultLimit() {
   toast(data.message);
 }
 
+async function saveAdminSessionDuration() {
+  const sessionMinutes = Number($('#admin-session-minutes').value);
+  const response = await fetch('/api/admin/session-duration', { method: 'POST', headers: { ...sessionHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionMinutes }) });
+  const data = await response.json();
+  if (!response.ok) { window.alert(data.error || '관리자 세션 시간을 저장하지 못했습니다.'); return; }
+  renderStatus(data.status);
+  $('#admin-message').textContent = data.message;
+  toast(data.message);
+}
+
 async function addCandidate(group) {
   const input = $(`#add-${group}-candidate`);
   const name = input.value.trim();
@@ -295,10 +330,12 @@ $('#name-form')?.addEventListener('submit', (event) => { event.preventDefault();
 $('#login-form').addEventListener('submit', (event) => { event.preventDefault(); enter(); });
 $('#name-back').addEventListener('click', () => show(landingView));
 $('#logout-button').addEventListener('click', logout);
+window.addEventListener('pagehide', logoutOnPageExit);
 $('#vote-button').addEventListener('click', submitVote);
 $('#release-participants').addEventListener('click', releaseParticipants);
 $('#reset-round').addEventListener('click', resetRound);
 $('#save-result-limit').addEventListener('click', saveResultLimit);
+$('#save-admin-session-duration').addEventListener('click', saveAdminSessionDuration);
 $('#admin-round-select').addEventListener('change', () => {
   const round = state.status?.admin?.rounds?.find((item) => item.key === $('#admin-round-select').value);
   renderRoundParticipation(round);

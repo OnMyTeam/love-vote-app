@@ -147,7 +147,8 @@ async function initializeDatabase() {
       value TEXT NOT NULL
     );
     INSERT OR IGNORE INTO settings (key, value) VALUES ('result_limit', '3');
-  `);
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_session_minutes', '30');
+    `);
 
   const migrationDone = database.prepare("SELECT value FROM metadata WHERE key = 'json_migration'").get();
   if (!migrationDone) {
@@ -191,9 +192,13 @@ function getDatabase() {
 function readStore() {
   const db = getDatabase();
   const resultLimit = Number(db.prepare("SELECT value FROM settings WHERE key = 'result_limit'").get()?.value);
+  const adminSessionMinutes = Number(db.prepare("SELECT value FROM settings WHERE key = 'admin_session_minutes'").get()?.value);
   return {
     votes: db.prepare('SELECT round, voter, candidate, created_at AS createdAt FROM votes ORDER BY id').all(),
-    settings: { resultLimit: Number.isInteger(resultLimit) && resultLimit > 0 ? resultLimit : 3 },
+    settings: {
+      resultLimit: Number.isInteger(resultLimit) && resultLimit > 0 ? resultLimit : 3,
+      adminSessionMinutes: Number.isInteger(adminSessionMinutes) && adminSessionMinutes > 0 ? adminSessionMinutes : 30,
+    },
   };
 }
 
@@ -348,13 +353,16 @@ function buildStatus(voterName, voterRole) {
       activeCount: activeParticipants.size,
       activeParticipants: [...activeParticipants.keys()].map((name) => ({ name, group: getParticipantGroup(config, name) })),
       resultLimit,
+      sessionMinutes: store.settings.adminSessionMinutes,
       rounds: adminRounds,
     } : null,
     history,
   };
 }
 
-const SESSION_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const MIN_ADMIN_SESSION_MINUTES = 1;
+const MAX_ADMIN_SESSION_MINUTES = 1440;
 const sessions = new Map();
 const activeParticipants = new Map();
 
@@ -370,7 +378,7 @@ function clearSession(token) {
 function pruneSessions() {
   const now = Date.now();
   for (const [token, session] of sessions) {
-    if (now - session.lastSeen > SESSION_TTL_MS) clearSession(token);
+    if (now - session.lastSeen > (session.ttlMs || SESSION_TTL_MS)) clearSession(token);
   }
 }
 
@@ -411,7 +419,7 @@ app.post('/api/session', (req, res) => {
   }
 
   if (!valid) {
-    const error = role === 'admin' ? '관리자 비밀번호가 올바르지 않습니다.' : '.env에 등록된 참여자 이름을 입력해 주세요.';
+    const error = role === 'admin' ? '관리자 비밀번호가 올바르지 않습니다.' : '등록된 참여자 이름을 입력해 주세요.';
     return res.status(401).json({ error });
   }
   if (role === 'participant') {
@@ -422,7 +430,14 @@ app.post('/api/session', (req, res) => {
     if (activeToken) activeParticipants.delete(normalizedName);
   }
   const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, { role, name: normalizedName, createdAt: Date.now(), lastSeen: Date.now() });
+  const adminSessionMinutes = readStore().settings.adminSessionMinutes;
+  sessions.set(token, {
+    role,
+    name: normalizedName,
+    createdAt: Date.now(),
+    lastSeen: Date.now(),
+    ttlMs: role === 'admin' ? adminSessionMinutes * 60 * 1000 : SESSION_TTL_MS,
+  });
   if (role === 'participant') activeParticipants.set(normalizedName, token);
   return res.json({ token, role, name: normalizedName, canVote: role === 'participant', status: buildStatus(normalizedName, role) });
 });
@@ -525,6 +540,20 @@ app.post('/api/admin/result-limit', (req, res) => {
   getDatabase().prepare("INSERT INTO settings (key, value) VALUES ('result_limit', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(String(resultLimit));
   return res.json({ message: `투표 종료 후 상위 ${resultLimit}명까지 표시합니다.`, status: buildStatus(session.name, session.role) });
+});
+
+app.post('/api/admin/session-duration', (req, res) => {
+  const session = getAdminSession(req, res);
+  if (!session) return;
+  const sessionMinutes = Number(req.body?.sessionMinutes);
+  if (!Number.isInteger(sessionMinutes) || sessionMinutes < MIN_ADMIN_SESSION_MINUTES || sessionMinutes > MAX_ADMIN_SESSION_MINUTES) {
+    return res.status(400).json({ error: `관리자 세션 시간은 ${MIN_ADMIN_SESSION_MINUTES}분에서 ${MAX_ADMIN_SESSION_MINUTES}분 사이로 입력해 주세요.` });
+  }
+  getDatabase().prepare("INSERT INTO settings (key, value) VALUES ('admin_session_minutes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .run(String(sessionMinutes));
+  session.ttlMs = sessionMinutes * 60 * 1000;
+  session.lastSeen = Date.now();
+  return res.json({ message: `관리자 세션 시간이 ${sessionMinutes}분으로 저장되었습니다.`, status: buildStatus(session.name, session.role) });
 });
 
 app.post('/api/admin/candidates', (req, res) => {

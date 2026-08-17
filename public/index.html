@@ -54,7 +54,7 @@
           </form>
         </div>
       </section>
-
+ 
       <section id="vote-view" class="view hidden">
         <div class="dashboard-head">
           <div><p class="eyebrow">HOURLY LOVE VOTE</p><h2>반가워요, <span id="voter-name">—</span>님</h2></div>
@@ -75,6 +75,7 @@
                 <div class="candidate-manager" data-manager-group="girl"><div class="candidate-manager-label girl-label">GIRL <span>여자</span></div><div class="managed-candidate-list" id="admin-girl-candidates"></div><div class="add-candidate-row"><input id="add-girl-candidate" maxlength="30" placeholder="여자 후보 이름" /><button type="button" data-add-candidate="girl">추가</button></div></div>
               </div>
               <div class="result-limit-setting"><label for="result-limit-input">투표 종료 후 결과 표시 인원</label><div class="limit-input-row"><input id="result-limit-input" type="number" min="1" value="3" /><span>명까지</span><button class="save-limit-button" id="save-result-limit">저장</button></div></div>
+              <div class="result-limit-setting session-duration-setting"><label for="admin-session-minutes">관리자 세션 유지 시간</label><div class="limit-input-row"><input id="admin-session-minutes" type="number" min="1" max="1440" value="30" /><span>분</span><button class="save-limit-button" id="save-admin-session-duration">저장</button></div><small class="setting-help">관리자 화면에서 활동이 없을 때 자동 로그아웃되는 시간입니다.</small></div>
               <div class="admin-reset"><label for="admin-round-select">시간대별 투표 현황</label><select id="admin-round-select"></select><div class="round-participation" id="round-participation"></div><button class="admin-action reset-action" id="reset-round"><span>⌫</span><div><strong>선택한 시간대 초기화</strong><small>해당 시간대의 투표 기록을 삭제합니다.</small></div></button></div>
               <p class="admin-message" id="admin-message"></p>
             </div>
