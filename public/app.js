@@ -38,17 +38,17 @@ function chooseRole(role) {
   const isGuest = role === 'guest';
   $('#login-icon').textContent = isAdmin ? '⌘' : '✦';
   $('#login-icon').style.color = isAdmin ? '#315b9c' : isGuest ? '#a74263' : 'var(--blue)';
-  $('#login-eyebrow').textContent = isAdmin ? 'ADMIN ACCESS' : isGuest ? 'GUEST ACCESS' : 'PARTICIPANT ACCESS';
+  $('#login-eyebrow').textContent = isAdmin ? 'ADMIN ACCESS' : isGuest ? 'STAFF ACCESS' : 'PARTICIPANT ACCESS';
   $('#login-title').innerHTML = isAdmin ? '관리자 화면으로<br /><span>입장합니다</span>' : isGuest ? '결과를<br /><span>확인해 보세요</span>' : '참여자 이름을<br /><span>확인해 주세요</span>';
-  $('#login-copy').textContent = isAdmin ? '관리자는 투표 현황과 결과만 확인할 수 있어요.' : isGuest ? 'Guest는 투표 없이 현재 현황만 볼 수 있어요.' : '등록된 이름만 투표할 수 있어요.';
+  $('#login-copy').textContent = isAdmin ? '관리자는 투표 현황과 결과만 확인할 수 있어요.' : isGuest ? '스태프는 투표 없이 현재 현황만 볼 수 있어요.' : '등록된 이름만 투표할 수 있어요.';
   $('#name-label').textContent = isAdmin ? '관리자 비밀번호' : isGuest ? '표시 이름' : '이름';
   $('#name-input').type = isAdmin ? 'password' : 'text';
   $('#name-input').autocomplete = isAdmin ? 'new-password' : 'off';
-  $('#name-input').placeholder = isAdmin ? '비밀번호를 입력하세요' : isGuest ? 'Guest' : '이름을 입력하세요';
+  $('#name-input').placeholder = isAdmin ? '비밀번호를 입력하세요' : isGuest ? '스태프' : '이름을 입력하세요';
   $('#name-input').closest('label')?.remove();
   show(nameView);
   if (isGuest) {
-    $('#name-input').value = 'Guest';
+    $('#name-input').value = '스태프';
     enter();
     return;
   }
@@ -94,14 +94,14 @@ function renderCandidates(config, voterGroup, readOnly = false) {
   }));
 }
 
-function renderHistory(history) {
+function renderHistory(history, showVoteCounts = true) {
   $('#archive-count').textContent = `${history.length} ${history.length === 1 ? 'ROUND' : 'ROUNDS'}`;
   if (!history.length) {
     $('#history-list').innerHTML = '<div class="empty-state">첫 결과가 쌓이면<br />이곳에 기록됩니다.</div>';
     return;
   }
-  const renderGenderRanking = (ranking, group, label, koreanLabel) => `<section class="gender-result ${group}-result"><div class="gender-result-label">${label} <span>${koreanLabel}</span></div><div class="ranking-list">${ranking.map((candidate) => `<div class="ranking-row"><span class="rank-badge rank-${candidate.rank}">${candidate.rank <= 3 ? '♛' : candidate.rank}</span><span class="ranking-name">${candidate.name}</span><strong>${candidate.count}표</strong></div>`).join('')}</div></section>`;
-  $('#history-list').innerHTML = history.map((item) => `<article class="history-item"><div class="history-date">${item.dateLabel}</div><div class="history-time">${item.timeLabel}</div><div class="gender-result-grid">${renderGenderRanking(item.boyRanking || [], 'boy', 'BOY', '남자')}${renderGenderRanking(item.girlRanking || [], 'girl', 'GIRL', '여자')}</div><div class="history-progress">${item.total}표 완료</div></article>`).join('');
+  const renderGenderRanking = (ranking, group, label, koreanLabel) => `<section class="gender-result ${group}-result"><div class="gender-result-label">${label} <span>${koreanLabel}</span></div><div class="ranking-list">${ranking.map((candidate) => `<div class="ranking-row"><span class="rank-badge rank-${candidate.rank}">${candidate.rank <= 3 ? '♛' : candidate.rank}</span><span class="ranking-name">${candidate.name}</span>${showVoteCounts ? `<strong>${candidate.count}표</strong>` : ''}</div>`).join('')}</div></section>`;
+  $('#history-list').innerHTML = history.map((item) => `<article class="history-item"><div class="history-date">${item.dateLabel}</div><div class="history-time">${item.timeLabel}</div><div class="gender-result-grid">${renderGenderRanking(item.boyRanking || [], 'boy', 'BOY', '남자')}${renderGenderRanking(item.girlRanking || [], 'girl', 'GIRL', '여자')}</div>${showVoteCounts ? `<div class="history-progress">${item.total}표 완료</div>` : ''}</article>`).join('');
 }
 
 function renderStatus(status) {
@@ -126,13 +126,13 @@ function renderStatus(status) {
   $('#read-only-banner').classList.toggle('hidden', isParticipant);
   $('#admin-tools').classList.toggle('hidden', !isAdmin);
   if (!isParticipant) {
-    $('#read-only-title').textContent = isAdmin ? '관리자 확인 모드입니다' : 'Guest 확인 모드입니다';
+    $('#read-only-title').textContent = isAdmin ? '관리자 확인 모드입니다' : '스태프 확인 모드입니다';
     $('#read-only-copy').textContent = '후보 선택과 투표는 참여자만 할 수 있어요.';
   }
   $('#vote-button').disabled = !state.selected || !canVote;
   $('#vote-note').textContent = current.hasVoted ? '이번 시간 투표를 완료했습니다. 다음 라운드를 기다려 주세요.' : '한 시간에 한 번 투표할 수 있습니다.';
   renderAdminTools(status);
-  renderHistory(status.history);
+  renderHistory(status.history, status.showVoteCounts !== false);
 }
 
 function renderAdminTools(status) {
@@ -144,6 +144,7 @@ function renderAdminTools(status) {
     : '<p class="no-active-participants">현재 참여 중인 사람이 없습니다.</p>';
   renderCandidateManagers(status.config);
   $('#result-limit-input').value = status.admin?.resultLimit || 3;
+  $('#show-vote-counts').checked = status.admin?.showVoteCounts !== false;
   $('#admin-session-minutes').value = status.admin?.sessionMinutes || 30;
   const rounds = status.admin?.rounds || [status.currentRound, ...status.history];
   $('#admin-round-select').innerHTML = rounds.map((round, index) => `<option value="${round.key}">${index === 0 ? '현재 ' : ''}${round.dateLabel} · ${round.timeLabel} (${round.total}/${round.eligible})</option>`).join('');
@@ -231,7 +232,7 @@ async function restoreSession() {
     if (!session.token || !session.role) throw new Error('invalid session');
     state.token = session.token;
     state.role = session.role;
-    state.name = session.name || (session.role === 'guest' ? 'Guest' : '관리자');
+    state.name = session.name || (session.role === 'guest' ? '스태프' : '관리자');
     const response = await fetch('/api/status', { headers: sessionHeaders() });
     if (!response.ok) throw new Error('expired session');
     const status = await response.json();
@@ -294,6 +295,16 @@ async function saveResultLimit() {
   toast(data.message);
 }
 
+async function saveShowVoteCounts() {
+  const showVoteCounts = $('#show-vote-counts').checked;
+  const response = await fetch('/api/admin/show-vote-counts', { method: 'POST', headers: { ...sessionHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ showVoteCounts }) });
+  const data = await response.json();
+  if (!response.ok) { window.alert(data.error || '투표수 표시 설정을 저장하지 못했습니다.'); return; }
+  renderStatus(data.status);
+  $('#admin-message').textContent = data.message;
+  toast(data.message);
+}
+
 async function saveAdminSessionDuration() {
   const sessionMinutes = Number($('#admin-session-minutes').value);
   const response = await fetch('/api/admin/session-duration', { method: 'POST', headers: { ...sessionHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionMinutes }) });
@@ -335,6 +346,7 @@ $('#vote-button').addEventListener('click', submitVote);
 $('#release-participants').addEventListener('click', releaseParticipants);
 $('#reset-round').addEventListener('click', resetRound);
 $('#save-result-limit').addEventListener('click', saveResultLimit);
+$('#save-show-vote-counts').addEventListener('click', saveShowVoteCounts);
 $('#save-admin-session-duration').addEventListener('click', saveAdminSessionDuration);
 $('#admin-round-select').addEventListener('change', () => {
   const round = state.status?.admin?.rounds?.find((item) => item.key === $('#admin-round-select').value);

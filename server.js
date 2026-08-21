@@ -147,6 +147,7 @@ async function initializeDatabase() {
       value TEXT NOT NULL
     );
     INSERT OR IGNORE INTO settings (key, value) VALUES ('result_limit', '3');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('show_vote_counts', 'true');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_session_minutes', '30');
     `);
 
@@ -174,6 +175,10 @@ async function initializeDatabase() {
           if (Number.isInteger(resultLimit) && resultLimit > 0) {
             database.prepare("UPDATE settings SET value = ? WHERE key = 'result_limit'").run(String(resultLimit));
           }
+          if (typeof legacy.settings?.showVoteCounts === 'boolean') {
+            database.prepare("UPDATE settings SET value = ? WHERE key = 'show_vote_counts'")
+              .run(String(legacy.settings.showVoteCounts));
+          }
         } catch {
           // Keep the database usable if the legacy JSON file is missing or invalid.
         }
@@ -192,11 +197,13 @@ function getDatabase() {
 function readStore() {
   const db = getDatabase();
   const resultLimit = Number(db.prepare("SELECT value FROM settings WHERE key = 'result_limit'").get()?.value);
+  const showVoteCountsValue = db.prepare("SELECT value FROM settings WHERE key = 'show_vote_counts'").get()?.value;
   const adminSessionMinutes = Number(db.prepare("SELECT value FROM settings WHERE key = 'admin_session_minutes'").get()?.value);
   return {
     votes: db.prepare('SELECT round, voter, candidate, created_at AS createdAt FROM votes ORDER BY id').all(),
     settings: {
       resultLimit: Number.isInteger(resultLimit) && resultLimit > 0 ? resultLimit : 3,
+      showVoteCounts: showVoteCountsValue !== 'false',
       adminSessionMinutes: Number.isInteger(adminSessionMinutes) && adminSessionMinutes > 0 ? adminSessionMinutes : 30,
     },
   };
@@ -269,11 +276,18 @@ function getResultLimit(store, candidateCount) {
 }
 
 function buildRanking(names, counts, limit) {
-  return names
+  const ranking = names
     .map((name) => ({ name, count: counts[name] || 0 }))
-    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ko'))
-    .slice(0, limit)
-    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ko'));
+  let previousCount;
+  let previousRank;
+  const ranked = ranking.map((candidate, index) => {
+    const rank = index === 0 || candidate.count !== previousCount ? index + 1 : previousRank;
+    previousCount = candidate.count;
+    previousRank = rank;
+    return { ...candidate, rank };
+  });
+  return ranked.filter((candidate) => candidate.rank <= limit);
 }
 
 function buildStatus(voterName, voterRole) {
@@ -294,14 +308,14 @@ function buildStatus(voterName, voterRole) {
     votes.forEach((vote) => { counts[vote.candidate] = (counts[vote.candidate] || 0) + 1; });
     const boyRanking = buildRanking(publicConfig.boy, counts, resultLimit);
     const girlRanking = buildRanking(publicConfig.girl, counts, resultLimit);
-    const combinedRanking = [...boyRanking, ...girlRanking].sort((left, right) => right.count - left.count);
+    const combinedRanking = buildRanking([...publicConfig.boy, ...publicConfig.girl], counts, resultLimit);
     const winnerCount = combinedRanking[0]?.count || 0;
     return {
       ...formatRound(round),
       total: votes.length,
       complete: votes.length >= eligible.length,
       winner: combinedRanking.filter(({ count }) => count === winnerCount).map(({ name }) => name),
-      ranking: combinedRanking.slice(0, resultLimit),
+      ranking: combinedRanking,
       boyRanking,
       girlRanking,
     candidates: [...publicConfig.boy, ...publicConfig.girl].map((name) => ({ name, count: counts[name] || 0 })),
@@ -336,6 +350,7 @@ function buildStatus(voterName, voterRole) {
   roundVotes.forEach((vote) => { currentCounts[vote.candidate] = (currentCounts[vote.candidate] || 0) + 1; });
   return {
     config: publicConfig,
+    showVoteCounts: store.settings.showVoteCounts,
     voter: voterName ? {
       name: voterName,
       role: voterRole || null,
@@ -353,6 +368,7 @@ function buildStatus(voterName, voterRole) {
       activeCount: activeParticipants.size,
       activeParticipants: [...activeParticipants.keys()].map((name) => ({ name, group: getParticipantGroup(config, name) })),
       resultLimit,
+      showVoteCounts: store.settings.showVoteCounts,
       sessionMinutes: store.settings.adminSessionMinutes,
       rounds: adminRounds,
     } : null,
@@ -415,7 +431,7 @@ app.post('/api/session', (req, res) => {
     normalizedName = '관리자';
   } else if (role === 'guest') {
     valid = true;
-    normalizedName = 'Guest';
+    normalizedName = '스태프';
   }
 
   if (!valid) {
@@ -452,7 +468,7 @@ app.get('/api/status', (req, res) => {
 app.post('/api/votes', (req, res) => {
   const session = getSession(req.get('x-session-token'));
   if (!session) return res.status(401).json({ error: '먼저 참여자 유형을 선택해 주세요.' });
-  if (session.role !== 'participant') return res.status(403).json({ error: '관리자와 Guest는 투표할 수 없습니다.' });
+  if (session.role !== 'participant') return res.status(403).json({ error: '관리자와 스태프는 투표할 수 없습니다.' });
 
   const config = loadConfig();
   const participantGroup = getParticipantGroup(config, session.name);
@@ -535,11 +551,26 @@ app.post('/api/admin/result-limit', (req, res) => {
   const candidateCount = config.boy.length + config.girl.length;
   const resultLimit = Number(req.body?.resultLimit);
   if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > candidateCount) {
-    return res.status(400).json({ error: `표시 인원은 1명부터 ${candidateCount}명 사이로 입력해 주세요.` });
+    return res.status(400).json({ error: `표시 순위는 1위부터 ${candidateCount}위 사이로 입력해 주세요.` });
   }
   getDatabase().prepare("INSERT INTO settings (key, value) VALUES ('result_limit', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(String(resultLimit));
-  return res.json({ message: `투표 종료 후 상위 ${resultLimit}명까지 표시합니다.`, status: buildStatus(session.name, session.role) });
+  return res.json({ message: `투표 종료 후 상위 ${resultLimit}위까지 표시합니다. 공동 순위는 모두 표시합니다.`, status: buildStatus(session.name, session.role) });
+});
+
+app.post('/api/admin/show-vote-counts', (req, res) => {
+  const session = getAdminSession(req, res);
+  if (!session) return;
+  const showVoteCounts = req.body?.showVoteCounts;
+  if (typeof showVoteCounts !== 'boolean') {
+    return res.status(400).json({ error: '투표수 표시 여부를 선택해 주세요.' });
+  }
+  getDatabase().prepare("INSERT INTO settings (key, value) VALUES ('show_vote_counts', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .run(String(showVoteCounts));
+  return res.json({
+    message: showVoteCounts ? '결과에 투표수를 표시합니다.' : '결과에서 투표수를 숨깁니다.',
+    status: buildStatus(session.name, session.role),
+  });
 });
 
 app.post('/api/admin/session-duration', (req, res) => {
